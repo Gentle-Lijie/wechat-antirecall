@@ -10,6 +10,7 @@
 #include <memory>
 #include <optional>
 #include <os/log.h>
+#include "MessageProbe.h"
 #include "RedPacketInternal.h"
 #include "RedPacketPolicy.hpp"
 #include "WeChatAntiRecallRuntime.h"
@@ -709,6 +710,42 @@ void wechat_antirecall_red_packet_observe(void *message, int mode) {
     }
 #endif
 }
+
+namespace message_probe {
+
+bool readReceived(void *message, int mode, Received &out) {
+#if defined(__arm64__)
+    using namespace red_packet;
+    Api *api = activeApi.load();
+    if (!api || mode != 1 || !readable(message, 632) ||
+        field<uintptr_t>(message, 0) != api->at(api->profile->messageVtable)) return false;
+    auto from = readString(static_cast<uint8_t *>(message) + 24, 256);
+    auto to = readString(static_cast<uint8_t *>(message) + 48, 256);
+    auto content = readString(static_cast<uint8_t *>(message) + 304);
+    if (!from || !to || !content) return false;
+    out.type = field<uint32_t>(message, 12);
+    out.created = field<uint32_t>(message, 276);
+    out.serverId = field<uint64_t>(message, 248);
+    out.from = std::move(*from);
+    out.to = std::move(*to);
+    out.content = std::move(*content);
+    return true;
+#else
+    (void)message; (void)mode; (void)out;
+    return false;
+#endif
+}
+
+std::string currentAccount() {
+#if defined(__arm64__)
+    red_packet::Api *api = red_packet::activeApi.load();
+    return api ? api->account() : std::string();
+#else
+    return {};
+#endif
+}
+
+}  // namespace message_probe
 
 #if defined(__arm64__)
 namespace {

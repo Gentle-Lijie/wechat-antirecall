@@ -4,6 +4,7 @@ enum NavSection: String, CaseIterable, Identifiable {
     case home
     case tipPhrase
     case recallLog
+    case keywordAlert
     case redPacket
     case advanced
     case clone
@@ -18,6 +19,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .home: return "首页"
         case .tipPhrase: return "自定义提示"
         case .recallLog: return "撤回记录"
+        case .keywordAlert: return "关键词提醒"
         case .redPacket: return "自动红包"
         case .advanced: return "高级安装"
         case .clone: return "微信多开"
@@ -32,6 +34,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .home: return "house.fill"
         case .tipPhrase: return "text.bubble.fill"
         case .recallLog: return "clock.arrow.circlepath"
+        case .keywordAlert: return "bell.badge.fill"
         case .redPacket: return "gift.fill"
         case .advanced: return "slider.horizontal.3"
         case .clone: return "square.on.square"
@@ -120,6 +123,7 @@ struct ContentView: View {
                             goToUpdates: { navigate(to: .updates) })
                     case .tipPhrase: TipPhraseView()
                     case .recallLog: RecallLogView()
+                    case .keywordAlert: KeywordAlertView()
                     case .redPacket: RedPacketView()
                     case .advanced:
                         AdvancedInstallView(

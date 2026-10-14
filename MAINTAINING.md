@@ -160,6 +160,21 @@
 
 ---
 
+## 关键词提醒（keyword-alert）
+
+默认关闭的本地通知，挂在**通用 Message 终结器** hook 上（`hookedFinalizeMessage` 在原终结器和红包观察之后调用 `wechat_antirecall_keyword_alert_observe`），**不新增任何每构建地址**。
+
+- **读取 Message 字段**：`MessageProbe.h` 的 `message_probe::readReceived`，实现在 `RedPacket.mm`，因为只有红包模块持有每构建的 profile（`messageVtable` 比对 + 632 字节布局检查）。偏移：`type +0x0C`、`serverId +0xF8`、`from +0x18`（单聊为发送者，群聊为 `@chatroom` 群 ID）、`to +0x30`（接收账号）、`created +0x114`、`content +0x130`。所以此功能只在有红包 profile 的构建上可用，CLI 的 `supported` 即 `RedPacketSettings.supportedBuilds`；**新增红包构建时这里自动跟随，但要确认上述偏移**。
+- **设置**：偏好键 `WeChatAntiRecall_KeywordAlert` = `{enabled: Bool, keywords: [String]}`。runtime 严格解析：`enabled` 必须是真布尔，关键词必须已 trim、1–32 个 UTF-16 单元、无控制字符、最多 20 个，**任何一项不合格整份设置视为无效并保持关闭**。CLI 保存前用同样的规则归一化（trim、去重忽略大小写）。设置每秒最多重读一次。
+- **新鲜度**：复用 `red_packet::fresh`（60 秒窗口，且 `created` 不得早于开启时刻）。启动时的基线是 runtime 加载时刻，所以登录同步的历史消息不会提醒；运行中从关到开则取当时。
+- **匹配**：只看 `type == 1` 的文字。群聊（`from` 以 `@chatroom` 结尾）先剥掉 `sender:\n` 前缀再匹配，避免关键词命中发送者账号；单聊不剥，因为正文里可能自带 `x:\ny`。比较用 `NSCaseInsensitiveSearch | NSWidthInsensitiveSearch`，按配置顺序取第一个命中。预览取正文前 80 个字（按字符簇截断，换行压成空格）。
+- **自己发的消息**：必须满足 `to == 当前账号` 且 `from != 账号` 且群前缀发送者 `!= 账号`。账号来自红包模块的 `Api::account()`，这是调用 WeChat 的原生函数，**只能在主队列调用**，所以字段先在消息线程拷贝出来，匹配之后再 `dispatch_async` 到主队列做账号、新鲜度、`serverId` 去重（复用 `red_packet::Ledger`）并发通知。
+- **通知**：`UNUserNotificationCenter`，沿用红包“仅提醒”的授权流程；授权往返期间设置或新鲜度可能变化，所以投递前在主队列再检查一次。标题 `关键词提醒：<词>`，正文为预览。**拿不到聊天名称**：Message 里只有群 ID，没有昵称；和红包提醒一样不显示原始 ID。
+- **运行时标记**：`WeChatAntiRecallKeywordAlert:1`，CLI 在已安装的 dylib 里搜索它判断 `runtimeAvailable`。
+- **测试**：`KeywordAlertTests` 覆盖严格设置解析、匹配（类型、大小写、全角、顺序、群前缀、预览截断）、自发消息过滤、CLI 选项和偏好存储，并核对 CLI 写出的值能被 runtime 接受。观察路径本身依赖真实的 Message 对象，只有真机能验证；尚未在真实微信里实测。
+
+---
+
 ## 屏蔽更新（update）
 
 补丁点是在相关更新函数入口写 `ret`（`C0035FD6`），或把强制更新开关的访问器改成返回 0 / 直接 `ret`。各构建号的推导来源不同：
@@ -290,6 +305,8 @@
 | `Sources/WeChatAntiRecall/Clone.swift` | `clone` 命令：复制 App、改写 Info.plist、独立 Bundle ID |
 | `Sources/WeChatAntiRecallRuntime/Runtime.mm` | 运行时 hook：`parseRevokeXML` 派发桩 / 内联挂载、提示渲染、时间 / 内容缓存、调试探针 |
 | `Sources/WeChatAntiRecallRuntime/RecallLog.mm` | 撤回记录：设置读取、JSONL 编码、去重、轮转、后台写入 |
+| `Sources/WeChatAntiRecallRuntime/KeywordAlert.mm` / `MessageProbe.h` | 关键词提醒：设置解析、匹配、通知；以及红包模块导出的已验证 Message 字段读取 |
+| `Sources/WeChatAntiRecall/KeywordAlert.swift` | `keyword-alert` 命令的选项、关键词归一化、偏好存储 |
 | `Sources/WeChatAntiRecall/RecallLog.swift` | `recall-log` 命令的选项、偏好存储、日志读取与清空 |
 | `patches.json` | 每个构建号的字节补丁 |
 | `Sources/WeChatAntiRecall/JSONOutput.swift` | `--json` 的 `Encodable` DTO + 共享编码器（GUI 契约） |

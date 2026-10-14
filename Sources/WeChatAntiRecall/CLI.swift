@@ -629,6 +629,8 @@ struct CLI {
             try redPacket(rest)
         case "recall-log":
             try recallLog(rest)
+        case "keyword-alert":
+            try keywordAlert(rest)
         case "help", "--help", "-h":
             printUsage()
         default:
@@ -950,6 +952,51 @@ struct CLI {
         }
     }
 
+    private func keywordAlert(_ arguments: [String]) throws {
+        let options = try KeywordAlertOptions(arguments)
+        let info = try readAppInfo(appPath: options.appPath)
+        let store = KeywordAlertPreferenceStore(
+            preferences: RecallTipPreferenceStore(domain: info.bundleIdentifier))
+        let runtimeData = try? Data(
+            contentsOf: info.appURL.appendingPathComponent(RuntimeTipInstaller.destinationDylibPath),
+            options: .mappedIfSafe)
+        let runtimeAvailable = runtimeData?.range(of: Data(KeywordAlertSettings.runtimeMarker.utf8)) != nil
+        let supported = KeywordAlertSettings.supportedBuilds.contains(info.buildVersion)
+        // Turning the alert off must stay possible even when the stored value is damaged.
+        var settings = options.action == .off ? ((try? store.load()) ?? KeywordAlertSettings()) : try store.load()
+        switch options.action {
+        case .get:
+            break
+        case .off:
+            settings.enabled = false
+            try store.save(settings)
+        case .set:
+            settings.keywords = options.keywords ?? []
+            try store.save(settings)
+        case .on:
+            if !supported {
+                throw ToolError.usage("关键词提醒暂仅适配微信构建 \(KeywordAlertSettings.supportedBuilds.sorted().joined(separator: "、"))；当前构建为 \(info.buildVersion)。")
+            }
+            guard runtimeAvailable else {
+                throw ToolError.usage("请先安装或更新包含关键词提醒的自定义提示运行时，再开启此设置。")
+            }
+            if let keywords = options.keywords { settings.keywords = keywords }
+            settings.enabled = true
+            try store.save(settings)
+        }
+        let report = KeywordAlertReport(
+            schemaVersion: jsonSchemaVersion, settings: settings, supported: supported,
+            build: info.buildVersion, runtimeAvailable: runtimeAvailable)
+        if options.json {
+            JSONOutput.emit(report)
+        } else {
+            print("关键词提醒：\(settings.enabled ? "已开启" : "已关闭")")
+            print("关键词：\(settings.keywords.isEmpty ? "（无）" : settings.keywords.joined(separator: "、"))")
+            print("构建：\(info.buildVersion)（\(supported ? "已适配" : "未适配")）")
+            print("需要本版本的自定义提示运行时。更换运行时后请重启微信。")
+        }
+    }
+
     private func tipPhrase(_ arguments: [String]) throws {
         let options = try RecallTipPhraseOptions(arguments)
         let domain = try recallTipPreferenceDomain(appPath: options.appPath)
@@ -1092,6 +1139,10 @@ struct CLI {
           raises a macOS notification (including muted chats) and is never opened.
           wechat-antirecall recall-log get|on|off|clear [--app /Applications/WeChat.app] [--json]
           wechat-antirecall recall-log list [--limit 200] [--app /Applications/WeChat.app] [--json]
+          wechat-antirecall keyword-alert get|off [--app /Applications/WeChat.app] [--json]
+          wechat-antirecall keyword-alert on|set [--keyword <word>]... [--app /Applications/WeChat.app] [--json]
+          keyword-alert on raises a macOS notification for an incoming text message that contains
+          a keyword (also in chats WeChat keeps silent). set only changes the keyword list.
           recall-log on keeps a local list of intercepted recalls (who, when, preview) in the
           WeChat container. It is off by default; clear deletes the stored entries.
 

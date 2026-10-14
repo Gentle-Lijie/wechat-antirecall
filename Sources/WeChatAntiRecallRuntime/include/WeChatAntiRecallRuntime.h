@@ -117,6 +117,15 @@ void wechat_antirecall_recall_log_observe_for_test(const char *directory, const 
 void wechat_antirecall_recall_log_flush_for_test(void);
 void wechat_antirecall_recall_log_reset_for_test(void);
 
+// Keyword alert (opt-in). Offline helpers; none of them touch WeChat or the notification center.
+const char *wechat_antirecall_keyword_alert_runtime_version(void);
+// "on"/"off" on the first line, then one keyword per line; NULL if the plist value is invalid.
+char *wechat_antirecall_keyword_alert_settings_for_plist_copy(const char *plistPath);
+// "keyword\nsnippet" for the first keyword (one per line in `keywordsOnePerLine`) found in a
+// text message (type 1), else NULL. Caller frees with wechat_antirecall_free.
+char *wechat_antirecall_keyword_alert_match_copy(uint32_t type, const char *from, const char *content, const char *keywordsOnePerLine);
+int wechat_antirecall_keyword_alert_addressed_to_others(const char *account, const char *from, const char *to, const char *content);
+
 #ifdef __cplusplus
 }
 #endif

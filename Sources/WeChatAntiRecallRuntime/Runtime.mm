@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "WeChatAntiRecallRuntime.h"
+#include "KeywordAlertInternal.h"
 #include "RecallLogInternal.h"
 #include "RedPacketInternal.h"
 
@@ -1784,6 +1785,7 @@ void hookedFinalizeMessage(void *message, int mode) {
     originalFinalizeMessage(message, mode);
     // The payment extension exists only after the original finalizer has parsed it.
     wechat_antirecall_red_packet_observe(message, mode);
+    wechat_antirecall_keyword_alert_observe(message, mode);
 }
 
 struct WeChatDylibImage {
