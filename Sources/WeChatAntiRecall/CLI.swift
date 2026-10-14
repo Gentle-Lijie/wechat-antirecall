@@ -631,6 +631,8 @@ struct CLI {
             try recallLog(rest)
         case "keyword-alert":
             try keywordAlert(rest)
+        case "window-privacy":
+            try windowPrivacy(rest)
         case "help", "--help", "-h":
             printUsage()
         default:
@@ -997,6 +999,41 @@ struct CLI {
         }
     }
 
+    private func windowPrivacy(_ arguments: [String]) throws {
+        let options = try WindowPrivacyOptions(arguments)
+        let info = try readAppInfo(appPath: options.appPath)
+        let store = WindowPrivacyPreferenceStore(
+            preferences: RecallTipPreferenceStore(domain: info.bundleIdentifier))
+        let runtimeData = try? Data(
+            contentsOf: info.appURL.appendingPathComponent(RuntimeTipInstaller.destinationDylibPath),
+            options: .mappedIfSafe)
+        let runtimeAvailable = runtimeData?.range(of: Data(WindowPrivacySettings.runtimeMarker.utf8)) != nil
+        // Turning the setting off must stay possible even when the stored value is damaged.
+        var settings = options.action == .off ? ((try? store.load()) ?? WindowPrivacySettings()) : try store.load()
+        switch options.action {
+        case .get:
+            break
+        case .off:
+            settings.enabled = false
+            try store.save(settings)
+        case .on:
+            guard runtimeAvailable else {
+                throw ToolError.usage("请先安装或更新包含窗口隐私的自定义提示运行时，再开启此设置。")
+            }
+            settings.enabled = true
+            try store.save(settings)
+        }
+        if options.json {
+            JSONOutput.emit(WindowPrivacyReport(
+                schemaVersion: jsonSchemaVersion, settings: settings,
+                build: info.buildVersion, runtimeAvailable: runtimeAvailable))
+        } else {
+            print("窗口隐私：\(settings.enabled ? "已开启" : "已关闭")")
+            print("构建：\(info.buildVersion)")
+            print("需要本版本的自定义提示运行时。开启或关闭会在半秒内对已打开的微信生效。")
+        }
+    }
+
     private func tipPhrase(_ arguments: [String]) throws {
         let options = try RecallTipPhraseOptions(arguments)
         let domain = try recallTipPreferenceDomain(appPath: options.appPath)
@@ -1143,6 +1180,9 @@ struct CLI {
           wechat-antirecall keyword-alert on|set [--keyword <word>]... [--app /Applications/WeChat.app] [--json]
           keyword-alert on raises a macOS notification for an incoming text message that contains
           a keyword (also in chats WeChat keeps silent). set only changes the keyword list.
+          wechat-antirecall window-privacy get|on|off [--app /Applications/WeChat.app] [--json]
+          window-privacy on keeps every WeChat window out of screen sharing, recordings and other
+          apps' screenshots (NSWindow sharingType none). It needs no per-build address.
           recall-log on keeps a local list of intercepted recalls (who, when, preview) in the
           WeChat container. It is off by default; clear deletes the stored entries.
 

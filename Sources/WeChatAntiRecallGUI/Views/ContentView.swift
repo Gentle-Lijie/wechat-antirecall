@@ -5,6 +5,7 @@ enum NavSection: String, CaseIterable, Identifiable {
     case tipPhrase
     case recallLog
     case keywordAlert
+    case windowPrivacy
     case redPacket
     case advanced
     case clone
@@ -20,6 +21,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .tipPhrase: return "自定义提示"
         case .recallLog: return "撤回记录"
         case .keywordAlert: return "关键词提醒"
+        case .windowPrivacy: return "窗口隐私"
         case .redPacket: return "自动红包"
         case .advanced: return "高级安装"
         case .clone: return "微信多开"
@@ -35,6 +37,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .tipPhrase: return "text.bubble.fill"
         case .recallLog: return "clock.arrow.circlepath"
         case .keywordAlert: return "bell.badge.fill"
+        case .windowPrivacy: return "eye.slash.fill"
         case .redPacket: return "gift.fill"
         case .advanced: return "slider.horizontal.3"
         case .clone: return "square.on.square"
@@ -124,6 +127,7 @@ struct ContentView: View {
                     case .tipPhrase: TipPhraseView()
                     case .recallLog: RecallLogView()
                     case .keywordAlert: KeywordAlertView()
+                    case .windowPrivacy: WindowPrivacyView()
                     case .redPacket: RedPacketView()
                     case .advanced:
                         AdvancedInstallView(

@@ -22,6 +22,7 @@
 #include "KeywordAlertInternal.h"
 #include "RecallLogInternal.h"
 #include "RedPacketInternal.h"
+#include "WindowPrivacyInternal.h"
 
 namespace {
 
@@ -2118,6 +2119,10 @@ void wechatImageAdded(const mach_header *header, intptr_t slide) {
         !isTargetWeChatDylibPath(info.dli_fname)) {
         return;
     }
+
+    // Window privacy needs no per-build address, so it starts whether or not the revoke
+    // hook below supports this build.
+    wechat_antirecall_window_privacy_start();
 
     uintptr_t start = 0;
     size_t size = 0;

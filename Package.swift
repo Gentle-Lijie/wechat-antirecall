@@ -29,6 +29,8 @@ let package = Package(
             ],
             linkerSettings: [
                 .linkedFramework("Foundation"),
+                // Window privacy sets NSWindow.sharingType from inside WeChat.
+                .linkedFramework("AppKit"),
                 // Notify-only mode posts local notifications from inside WeChat via
                 // UNUserNotificationCenter; also used by the offline test host.
                 .linkedFramework("UserNotifications")

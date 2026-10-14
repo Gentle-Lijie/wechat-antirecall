@@ -126,6 +126,12 @@ char *wechat_antirecall_keyword_alert_settings_for_plist_copy(const char *plistP
 char *wechat_antirecall_keyword_alert_match_copy(uint32_t type, const char *from, const char *content, const char *keywordsOnePerLine);
 int wechat_antirecall_keyword_alert_addressed_to_others(const char *account, const char *from, const char *to, const char *content);
 
+// Window privacy (opt-in). Offline helpers; the sweep runs one enforcement pass over windows
+// the caller owns and must be called on the main thread.
+const char *wechat_antirecall_window_privacy_runtime_version(void);
+int wechat_antirecall_window_privacy_enabled_for_plist(const char *plistPath);
+void wechat_antirecall_window_privacy_sweep_for_test(const void *const *windows, size_t count, int enabled);
+
 #ifdef __cplusplus
 }
 #endif

@@ -175,6 +175,20 @@
 
 ---
 
+## 窗口隐私（window-privacy）
+
+默认关闭。**不新增任何每构建地址，也不 hook WeChat 的函数**：只用公开的 AppKit 属性 `NSWindow.sharingType`。
+
+- **为什么不 hook `SetWindowSharingPolicy`**：270135 的 0x474ee58（`device_util_mac.mm`）确实是微信设置该属性的唯一入口，但那样每个构建都要重新定位。微信通过 `objc_msgSend` 调用 `setSharingType:`，而我们只需要让**所有**窗口都隐藏，不必拦截它的调用，直接在窗口上设置即可。
+- **机制**：`wechatImageAdded` 在发现微信核心库加载时调用 `wechat_antirecall_window_privacy_start`，**早于**撤回 hook 的安装，所以不受 hook 是否支持该构建的影响。它在主队列上起一个 0.5 秒的定时器，遍历 `NSApp.windows`；另外订阅 `NSWindowDidBecomeKey/Main/Expose`，窗口一变成前台就立刻处理，缩短新窗口的露出时间。
+- **设置**：偏好键 `WeChatAntiRecall_WindowPrivacy` = `{enabled: Bool}`，严格布尔，其余一律视为关闭。只读 cfprefsd，**不做 plist 回退**，因为这里每秒读两次，反复解析整份偏好文件不划算；CLI 本来就经 cfprefsd 写入。
+- **恢复**：第一次改某个窗口前，用弱引用表记下它原来的 `sharingType`；关闭时只恢复表里的窗口。微信自己已经设成 `none` 的窗口不记录、不恢复，所以不会被暴露。如果微信在我们隐藏之后又把窗口设回别的值，下次扫描会重新隐藏，并把那个新值当作要恢复的值。
+- **已知限制**：效果取决于捕获端和 macOS 版本（没有在录屏软件里实测过）；微信自带截图也会看不到微信窗口；系统绘制的通知横幅不受影响；窗口出现到被处理之间有极短的间隙。
+- **运行时标记**：`WeChatAntiRecallWindowPrivacy:1`。runtime 现在额外链接 AppKit（`Package.swift`）；微信本身已加载 AppKit，所以不增加依赖。
+- **测试**：`WindowPrivacyTests` 用真实的离屏 `NSWindow` 跑和定时器相同的 `sweep`：隐藏与恢复、保留窗口原值、不碰已被微信隐藏的窗口、微信重新设置后的重新隐藏、重复开启不丢原值；没有窗口服务（无图形会话）时这几项会跳过。
+
+---
+
 ## 屏蔽更新（update）
 
 补丁点是在相关更新函数入口写 `ret`（`C0035FD6`），或把强制更新开关的访问器改成返回 0 / 直接 `ret`。各构建号的推导来源不同：
@@ -306,6 +320,8 @@
 | `Sources/WeChatAntiRecallRuntime/Runtime.mm` | 运行时 hook：`parseRevokeXML` 派发桩 / 内联挂载、提示渲染、时间 / 内容缓存、调试探针 |
 | `Sources/WeChatAntiRecallRuntime/RecallLog.mm` | 撤回记录：设置读取、JSONL 编码、去重、轮转、后台写入 |
 | `Sources/WeChatAntiRecallRuntime/KeywordAlert.mm` / `MessageProbe.h` | 关键词提醒：设置解析、匹配、通知；以及红包模块导出的已验证 Message 字段读取 |
+| `Sources/WeChatAntiRecallRuntime/WindowPrivacy.mm` | 窗口隐私：定时 + 通知触发的 `NSWindow.sharingType` 隐藏与恢复 |
+| `Sources/WeChatAntiRecall/WindowPrivacy.swift` | `window-privacy` 命令的选项与偏好存储 |
 | `Sources/WeChatAntiRecall/KeywordAlert.swift` | `keyword-alert` 命令的选项、关键词归一化、偏好存储 |
 | `Sources/WeChatAntiRecall/RecallLog.swift` | `recall-log` 命令的选项、偏好存储、日志读取与清空 |
 | `patches.json` | 每个构建号的字节补丁 |
