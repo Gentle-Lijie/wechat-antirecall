@@ -106,8 +106,8 @@ final class RedPacketTests: XCTestCase {
     func testRuntimeMarkerMatchesRuntimeExport() {
         XCTAssertEqual(String(cString: wechat_antirecall_red_packet_runtime_version()),
                        RedPacketSettings.runtimeMarker)
-        XCTAssertEqual(RedPacketSettings.runtimeMarker, "WeChatAntiRecallRedPacket:8",
-                       "270133 needs the new native address table; older runtimes must require an update")
+        XCTAssertEqual(RedPacketSettings.runtimeMarker, "WeChatAntiRecallRedPacket:9",
+                       "270135 needs the new native address table; older runtimes must require an update")
     }
 
     func testBuild270102RedPacketSupportRequiresRecallMessageHook() {
@@ -120,14 +120,21 @@ final class RedPacketTests: XCTestCase {
     func testBuild270132RedPacketSupportRequiresRecallMessageHook() {
         XCTAssertTrue(RedPacketSettings.supportedBuilds.contains("270132"))
         XCTAssertTrue(RuntimeTipInstaller.supportedBuildVersions.contains("270132"))
-        XCTAssertFalse(RedPacketSettings.supportedBuilds.contains("270134"),
+        XCTAssertFalse(RedPacketSettings.supportedBuilds.contains("270136"),
                        "Unverified neighboring builds must not inherit native offsets")
     }
 
     func testBuild270133RedPacketSupportRequiresRecallMessageHook() {
         XCTAssertTrue(RedPacketSettings.supportedBuilds.contains("270133"))
         XCTAssertTrue(RuntimeTipInstaller.supportedBuildVersions.contains("270133"))
-        XCTAssertFalse(RedPacketSettings.supportedBuilds.contains("270134"),
+        XCTAssertFalse(RedPacketSettings.supportedBuilds.contains("270136"),
+                       "Unverified neighboring builds must not inherit native offsets")
+    }
+
+    func testBuild270135RedPacketSupportRequiresRecallMessageHook() {
+        XCTAssertTrue(RedPacketSettings.supportedBuilds.contains("270135"))
+        XCTAssertTrue(RuntimeTipInstaller.supportedBuildVersions.contains("270135"))
+        XCTAssertFalse(RedPacketSettings.supportedBuilds.contains("270136"),
                        "Unverified neighboring builds must not inherit native offsets")
     }
 
