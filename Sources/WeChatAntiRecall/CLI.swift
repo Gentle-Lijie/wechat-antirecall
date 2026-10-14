@@ -574,7 +574,7 @@ struct RecallTipPreferenceStore {
         try data.write(to: preferenceFileURL, options: .atomic)
     }
 
-    private static func defaultHomeDirectory() -> URL {
+    static func defaultHomeDirectory() -> URL {
         if geteuid() == 0,
            let sudoUser = ProcessInfo.processInfo.environment["SUDO_USER"],
            sudoUser != "root",
@@ -627,6 +627,8 @@ struct CLI {
             try tipPhrase(rest)
         case "red-packet":
             try redPacket(rest)
+        case "recall-log":
+            try recallLog(rest)
         case "help", "--help", "-h":
             printUsage()
         default:
@@ -883,6 +885,71 @@ struct CLI {
         }
     }
 
+    private func recallLog(_ arguments: [String]) throws {
+        let options = try RecallLogOptions(arguments)
+        let info = try readAppInfo(appPath: options.appPath)
+        let files = RecallLogFileStore(domain: info.bundleIdentifier)
+
+        if options.action == .list {
+            let snapshot = try files.load()
+            let shown = Array(snapshot.entries.prefix(options.limit))
+            if options.json {
+                JSONOutput.emit(RecallLogListReport(
+                    schemaVersion: jsonSchemaVersion, entries: shown,
+                    total: snapshot.entries.count, unreadableLines: snapshot.unreadableLines))
+            } else if shown.isEmpty {
+                print("撤回记录为空。")
+            } else {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+                for entry in shown {
+                    let time = formatter.string(from: Date(timeIntervalSince1970: TimeInterval(entry.loggedAt)))
+                    let content = entry.content.map { "：\($0)" } ?? ""
+                    print("\(time)  \(entry.session)  \(entry.notice)\(content)")
+                }
+                print("共 \(snapshot.entries.count) 条，显示 \(shown.count) 条。")
+            }
+            return
+        }
+
+        let store = RecallLogPreferenceStore(
+            preferences: RecallTipPreferenceStore(domain: info.bundleIdentifier))
+        let runtimeData = try? Data(
+            contentsOf: info.appURL.appendingPathComponent(RuntimeTipInstaller.destinationDylibPath),
+            options: .mappedIfSafe)
+        let runtimeAvailable = runtimeData?.range(of: Data(RecallLogSettings.runtimeMarker.utf8)) != nil
+        // Turning the log off must stay possible even when the stored value is damaged.
+        var settings = options.action == .off ? ((try? store.load()) ?? RecallLogSettings()) : try store.load()
+        switch options.action {
+        case .on:
+            guard runtimeAvailable else {
+                throw ToolError.usage("请先安装或更新包含撤回记录的自定义提示运行时，再开启此设置。")
+            }
+            settings.enabled = true
+            try store.save(settings)
+        case .off:
+            settings.enabled = false
+            try store.save(settings)
+        case .clear:
+            let removed = try files.clear()
+            if !options.json { print("已清空 \(removed) 条撤回记录。") }
+        case .get, .list:
+            break
+        }
+
+        // The count is informational; a read failure (no Full Disk Access) must not hide the settings.
+        let entryCount = try? files.load().entries.count
+        if options.json {
+            JSONOutput.emit(RecallLogReport(
+                schemaVersion: jsonSchemaVersion, settings: settings, build: info.buildVersion,
+                runtimeAvailable: runtimeAvailable, entryCount: entryCount))
+        } else if options.action != .clear {
+            print("撤回记录：\(settings.enabled ? "已开启" : "已关闭")")
+            print("记录条数：\(entryCount.map(String.init) ?? "无法读取（可能需要完全磁盘访问权限）")")
+            print("需要本版本的自定义提示运行时。更换运行时后请重启微信。")
+        }
+    }
+
     private func tipPhrase(_ arguments: [String]) throws {
         let options = try RecallTipPhraseOptions(arguments)
         let domain = try recallTipPreferenceDomain(appPath: options.appPath)
@@ -1023,6 +1090,10 @@ struct CLI {
           wechat-antirecall red-packet get|on|off [--notify-only] [--delay-ms 500] [--app /Applications/WeChat.app] [--json]
           red-packet on --notify-only switches to notify-only mode: a red packet only
           raises a macOS notification (including muted chats) and is never opened.
+          wechat-antirecall recall-log get|on|off|clear [--app /Applications/WeChat.app] [--json]
+          wechat-antirecall recall-log list [--limit 200] [--app /Applications/WeChat.app] [--json]
+          recall-log on keeps a local list of intercepted recalls (who, when, preview) in the
+          WeChat container. It is off by default; clear deletes the stored entries.
 
         Notes:
           install only patches versions present in patches.json.

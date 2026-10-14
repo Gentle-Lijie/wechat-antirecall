@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "WeChatAntiRecallRuntime.h"
+#include "RecallLogInternal.h"
 #include "RedPacketInternal.h"
 
 namespace {
@@ -1748,18 +1749,22 @@ bool hookedParseRevokeXML(void *message, std::string *xml, void *flag) {
             return result;
         }
 
+        // message+newMsgIdOffset was already zeroed by the static str-xzr patch before
+        // this hook ran, so use the real newmsgid carried by the XML to join against the
+        // content captured on the receive path. Empty on a cold-cache miss → {content}
+        // strips cleanly.
+        uint64_t contentKey = 0;
+        revokeNewMsgIdFromXML(xml, contentKey);
+        std::string contentPreview;
+        const bool hasContentPreview = lookupRevokeContentPreview(contentKey, contentPreview);
+
+        // Opt-in recall log. Best effort and independent of the tip rewrite below.
+        recall_log::record(*xml, originalReplaceMsg, hasContentPreview ? &contentPreview : nullptr);
+
         const char *phrase = [configuredPhrase() UTF8String];
         if (phrase != nullptr) {
             *newMsgId = 0;
             const auto timeText = stableRevokeTimeText(originalNewMsgId, xml, originalReplaceMsg, currentTimeText());
-            // message+newMsgIdOffset was already zeroed by the static str-xzr patch
-            // before this hook ran, so use the real newmsgid carried by the XML to join against the
-            // content captured on the receive path. Empty on a cold-cache miss → {content}
-            // strips cleanly.
-            uint64_t contentKey = 0;
-            revokeNewMsgIdFromXML(xml, contentKey);
-            std::string contentPreview;
-            lookupRevokeContentPreview(contentKey, contentPreview);
             replaceMsg->assign(renderRevokeTip(originalReplaceMsg, phrase, timeText, contentPreview));
         }
     }

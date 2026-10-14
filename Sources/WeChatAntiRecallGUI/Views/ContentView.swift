@@ -3,6 +3,7 @@ import SwiftUI
 enum NavSection: String, CaseIterable, Identifiable {
     case home
     case tipPhrase
+    case recallLog
     case redPacket
     case advanced
     case clone
@@ -16,6 +17,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         switch self {
         case .home: return "首页"
         case .tipPhrase: return "自定义提示"
+        case .recallLog: return "撤回记录"
         case .redPacket: return "自动红包"
         case .advanced: return "高级安装"
         case .clone: return "微信多开"
@@ -29,6 +31,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         switch self {
         case .home: return "house.fill"
         case .tipPhrase: return "text.bubble.fill"
+        case .recallLog: return "clock.arrow.circlepath"
         case .redPacket: return "gift.fill"
         case .advanced: return "slider.horizontal.3"
         case .clone: return "square.on.square"
@@ -116,6 +119,7 @@ struct ContentView: View {
                             goToAdvanced: { navigate(to: .advanced) },
                             goToUpdates: { navigate(to: .updates) })
                     case .tipPhrase: TipPhraseView()
+                    case .recallLog: RecallLogView()
                     case .redPacket: RedPacketView()
                     case .advanced:
                         AdvancedInstallView(

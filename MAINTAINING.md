@@ -145,6 +145,21 @@
 
 ---
 
+## 撤回记录（recall-log）
+
+默认关闭的本地清单，与撤回提示共用 `parseRevokeXML` hook，**不新增任何每构建地址**。
+
+- **设置**：偏好键 `WeChatAntiRecall_RecallLog` = `{enabled: Bool}`，由 CLI 经 `CFPreferences` 写入微信域（与 `tip-phrase`、`red-packet` 同一条路径）。runtime 在每次撤回时用 `CFPreferencesCopyAppValue` 读取，缺失、类型不是严格布尔或字典损坏都视为关闭，所以关闭立即生效，无需重启微信。
+- **挂载点**：`hookedParseRevokeXML` 在 `selfRecall` 提前返回**之后**、改写提示**之前**调用 `recall_log::record`。自己的撤回不记录。`{content}` 的缓存查询被提到这里，记录和提示共用同一次查询。
+- **文件**：`<容器>/Library/Application Support/WeChatAntiRecall/recall-log.jsonl`（目录 0700、文件 0600，`O_NOFOLLOW`）。微信有沙盒，所以 runtime 里的 `NSHomeDirectory()` 就是容器；CLI 按 `~/Library/Containers/<bundle id>/Data/…` 读取，多开副本因 bundle id 不同各有一份。
+- **格式**：每行一个 JSON 对象，键有序，`v` 为 1。字段：`loggedAt`（本机观察到撤回的 Unix 秒）、`createTime`（撤回 XML 里的 `createtime`，可为 null；**未核实它是原消息时间还是撤回时间**，所以界面只显示 `loggedAt`）、`session`、`msgId`、`newMsgId`（十进制字符串，避免 64 位精度问题）、`notice`（微信渲染好的提示，最长 512 字节）、`content`（接收路径缓存的预览，null 表示冷缓存，不等于空消息）。读取端跳过无法解析或 `v` 不是 1 的行并计数。
+- **去重与轮转**：runtime 在进程内记住最近 256 个 `newmsgid`，跳过微信重复下发的同一条撤回；读取端再按 `newMsgId` 去重（跨重启）。单个文件超过 2 MiB 时重命名为 `recall-log.1.jsonl`（覆盖旧的一份），所以最多保留约两倍大小。写入走专用串行队列，不阻塞消息线程。
+- **运行时标记**：`WeChatAntiRecallRecallLog:1`（`wechat_antirecall_recall_log_runtime_version`）。CLI 在已安装的 dylib 里搜索它来判断 `runtimeAvailable`；改变日志格式或语义时递增。
+- **权限**：GUI/CLI 读取别人的容器可能需要完全磁盘访问；读不到时 CLI 抛出含「权限」「完全磁盘访问」的错误，GUI 据此显示授权引导。
+- **测试**：`RecallLogTests` 覆盖编码（含非法 UTF-8、截断）、去重、轮转、符号链接拒绝、严格布尔设置、生产路径的开关行为，以及 runtime 写出的行能被 Swift 读取端解析。真实撤回需要两个账号，目前只做了离线验证。
+
+---
+
 ## 屏蔽更新（update）
 
 补丁点是在相关更新函数入口写 `ret`（`C0035FD6`），或把强制更新开关的访问器改成返回 0 / 直接 `ret`。各构建号的推导来源不同：
@@ -274,6 +289,8 @@
 | `Sources/WeChatAntiRecall/CLI.swift` | 命令解析、Mach-O 补丁 / dylib 注入、备份、重签名、`tip-phrase` 存储 |
 | `Sources/WeChatAntiRecall/Clone.swift` | `clone` 命令：复制 App、改写 Info.plist、独立 Bundle ID |
 | `Sources/WeChatAntiRecallRuntime/Runtime.mm` | 运行时 hook：`parseRevokeXML` 派发桩 / 内联挂载、提示渲染、时间 / 内容缓存、调试探针 |
+| `Sources/WeChatAntiRecallRuntime/RecallLog.mm` | 撤回记录：设置读取、JSONL 编码、去重、轮转、后台写入 |
+| `Sources/WeChatAntiRecall/RecallLog.swift` | `recall-log` 命令的选项、偏好存储、日志读取与清空 |
 | `patches.json` | 每个构建号的字节补丁 |
 | `Sources/WeChatAntiRecall/JSONOutput.swift` | `--json` 的 `Encodable` DTO + 共享编码器（GUI 契约） |
 | `Sources/WeChatAntiRecallGUI/` | SwiftUI 图形界面（薄壳，shell-out 调用预编译 CLI） |

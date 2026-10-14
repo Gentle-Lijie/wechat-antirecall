@@ -100,6 +100,23 @@ int wechat_antirecall_red_packet_fresh(uint64_t created, uint64_t activated, uin
 int wechat_antirecall_red_packet_policy_selftest(void);
 int wechat_antirecall_red_packet_native_abi_selftest(void);
 
+// Recall log (opt-in). Offline helpers: they only touch the paths passed in.
+const char *wechat_antirecall_recall_log_runtime_version(void);
+// 1 iff the plist holds a WeChatAntiRecall_RecallLog dictionary with a strict boolean enabled=true.
+int wechat_antirecall_recall_log_enabled_for_plist(const char *plistPath);
+// One JSON line (no trailing newline) for a revoke XML; `content` may be NULL for "unknown".
+// Caller frees with wechat_antirecall_free.
+char *wechat_antirecall_recall_log_encode_copy(const char *xml, const char *notice, const char *content, uint64_t loggedAt);
+int wechat_antirecall_recall_log_append_for_test(const char *directory, const char *line, uint64_t rotateBytes);
+// Production build + de-duplicate + append, run synchronously against `directory`.
+// Returns 1 iff a line was written, 0 for a duplicate or a failure.
+int wechat_antirecall_recall_log_record_for_test(const char *directory, const char *xml, const char *notice, const char *content, uint64_t loggedAt);
+// Production path including the real opt-in preference check, run against `directory`.
+void wechat_antirecall_recall_log_observe_for_test(const char *directory, const char *xml, const char *notice, const char *content);
+// Waits for pending background writes started by the observe call above.
+void wechat_antirecall_recall_log_flush_for_test(void);
+void wechat_antirecall_recall_log_reset_for_test(void);
+
 #ifdef __cplusplus
 }
 #endif
