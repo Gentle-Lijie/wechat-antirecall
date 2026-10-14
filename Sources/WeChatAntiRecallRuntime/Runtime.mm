@@ -31,7 +31,7 @@ constexpr size_t revokeContentCacheMaximumCount = 512;
 constexpr size_t revokeContentPreviewMaximumBytes = 240;
 constexpr size_t arm64StubLength = 16;
 
-// Call-site analysis through build 270132 confirms this function takes exactly
+// Call-site analysis through build 270133 confirms this function takes exactly
 // three arguments. The second argument is the raw XML and the wrapper has already
 // copied it into the build-specific handlerOutput replaceMsg field.
 using ParseRevokeXML = bool (*)(void *, std::string *, void *);
@@ -69,7 +69,7 @@ struct InlineRevokeHookConfig {
 };
 
 // The revoke XML handler is selected only for message-extension types 71/72, so it
-// cannot observe ordinary text/media messages. Verified builds from 269340 through 270132 carry
+// cannot observe ordinary text/media messages. Verified builds from 269340 through 270133 carry
 // a second inline hook at the common Message finalizer. Call-path analysis shows every incoming
 // Message reaches this function after serverId/msgType/content have been populated
 // and immediately before its type-specific extension parser is dispatched.
@@ -250,6 +250,11 @@ constexpr InlineRevokeHookConfig inlineRevokeHookConfigs[] = {
     // fields +0x1C8/+0x1D0. SLOT 0xA533FF0 is inside the fresh __DATA
     // zero-fill tail after __common ends at 0xA5339A8.
     {"270132", 0x4d16ce8, {0xA9BC5FF8, 0xA90157F6, 0xA9024FF4}, 0x4d16cf4, 0x1c8, 0x1d0},
+    // 270133 (WeChat 4.1.15.53): independently located
+    // parser 0x4D15438..0x4D16554 retains the +0x270 guard, +0xA10 store and
+    // fields +0x1C8/+0x1D0. SLOT 0xA51FFF0 is inside the __DATA zero-fill
+    // tail after __common ends at 0xA51FA68.
+    {"270133", 0x4d15438, {0xA9BC5FF8, 0xA90157F6, 0xA9024FF4}, 0x4d15444, 0x1c8, 0x1d0},
 };
 
 constexpr InlineMessageCaptureHookConfig inlineMessageCaptureHookConfigs[] = {
@@ -457,6 +462,19 @@ constexpr InlineMessageCaptureHookConfig inlineMessageCaptureHookConfigs[] = {
         0x4cb37bc,
         {0x39496008, 0x7100051F, 0x7A400820},
         0x4cb37c8,
+        0x0f8,
+        0x00c,
+        0x130,
+    },
+    // 270133: constructor 0x4CB0BB4 writes serverId +0xF8 at 0x4CB0CC8
+    // and content +0x130 at 0x4CB0CEC; helper 0x4CB1880 writes msgType
+    // +0x0C at 0x4CB18B8 before finalizer call 0x4CB1058. The finalizer retains the +0x258
+    // early-return flag; SLOT is 0xA51FFF8.
+    {
+        "270133",
+        0x4cb1f0c,
+        {0x39496008, 0x7100051F, 0x7A400820},
+        0x4cb1f18,
         0x0f8,
         0x00c,
         0x130,
